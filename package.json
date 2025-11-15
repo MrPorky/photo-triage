@@ -7,11 +7,19 @@
     "build": "vite build && tsc",
     "serve": "vite preview",
     "test": "vitest run",
-    "format": "biome format",
-    "lint": "biome lint",
-    "check": "biome check"
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "check": "tsc --noEmit",
+    "check:watch": "tsc --noEmit --watch"
   },
   "dependencies": {
+    "@capacitor/android": "7.4.4",
+    "@capacitor/app": "7.1.0",
+    "@capacitor/cli": "7.4.4",
+    "@capacitor/core": "7.4.4",
+    "@capacitor/haptics": "7.0.2",
+    "@capacitor/keyboard": "7.0.3",
+    "@capacitor/status-bar": "7.0.3",
     "@tailwindcss/vite": "^4.1.17",
     "@tanstack/react-devtools": "^0.8.1",
     "@tanstack/react-router": "^1.136.4",
