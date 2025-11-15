@@ -29,7 +29,10 @@
   "[css]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
-    "source.organizeImports.biome": "explicit"
+    "source.organizeImports.biome": "explicit",
+    "source.fixAll.biome": "explicit"
   }
 }
