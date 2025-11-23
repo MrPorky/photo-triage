@@ -1,5 +1,5 @@
 import { createRouter, RouterProvider } from '@tanstack/react-router';
-import { StrictMode } from 'react';
+import { StrictMode, use } from 'react';
 import ReactDOM from 'react-dom/client';
 
 // Import the generated route tree
@@ -7,6 +7,7 @@ import { routeTree } from './routeTree.gen';
 
 import './styles.css';
 import reportWebVitals from './reportWebVitals.ts';
+import { fileSystemService } from './services/filesystem.ts';
 
 // Create a new router instance
 const router = createRouter({
@@ -25,15 +26,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
+const mediaPermissionsGranted = fileSystemService.ensureMediaPermissions();
+
+const App = () => {
+  use(mediaPermissionsGranted);
+
+  return (
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>
+  );
+};
+
 // Render the app
 const rootElement = document.getElementById('app');
 if (rootElement && !rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <StrictMode>
-      <RouterProvider router={router} />
-    </StrictMode>,
-  );
+
+  root.render(<App />);
 }
 
 // If you want to start measuring performance in your app, pass a function
