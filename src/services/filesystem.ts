@@ -193,6 +193,22 @@ class FileSystemService {
    * Load all photos from camera, pending, and completed folders
    */
   async loadPhotos(): Promise<Photo[]> {
+    // Mock data for browser environment
+    if (!Capacitor.isNativePlatform()) {
+      console.log('[FileSystem] Running in browser, returning mock data');
+      return Array.from({ length: 100 }).map((_, i) => ({
+        id: `mock-${i}`,
+        originalName: `mock_photo_${i}.jpg`,
+        status: 'camera',
+        uri: `https://picsum.photos/400/400?random=${i}`,
+        cameraPath: `/mock/path/${i}.jpg`,
+        extension: 'jpg',
+        isVideo: false,
+        size: 1024 * 1024,
+        modifiedTime: Date.now() - i * 1000 * 60 * 60,
+      }));
+    }
+
     try {
       console.log('[FileSystem] Starting loadPhotos...');
       await this.initializeFolders();
@@ -369,7 +385,7 @@ class FileSystemService {
         };
       }
 
-      const pendingPath = `${this.config.pendingFolder}/${photo.originalName}~1`;
+      const pendingPath = `${this.config.pendingFolder}/${photo.originalName}`;
 
       // Copy from camera to pending (regular file path)
       await this.copyFile(photo.cameraPath, pendingPath);
@@ -496,6 +512,79 @@ class FileSystemService {
       };
     } catch (error) {
       console.error('Error completing photo:', error);
+      return { success: false, error: String(error) };
+    }
+  }
+
+  /**
+   * Complete all pending photos
+   */
+  async completeAllPending(): Promise<FileOperationResult> {
+    try {
+      const files = await this.readDirectory(this.config.pendingFolder);
+
+      // Group files by base name to identify unique photos
+      const uniquePhotos = new Map<
+        string,
+        { originalName: string; extension: string }
+      >();
+
+      for (const filename of files) {
+        const baseName = this.getBaseFilename(filename);
+        const ext = this.getFileExtension(filename);
+
+        // We want the clean name (without version) for the target file
+        const cleanName = `${baseName}.${ext}`;
+
+        if (!uniquePhotos.has(baseName)) {
+          uniquePhotos.set(baseName, {
+            originalName: cleanName,
+            extension: ext,
+          });
+        }
+      }
+
+      console.log(
+        `[FileSystem] Completing all pending: found ${uniquePhotos.size} unique photos`,
+      );
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const { originalName, extension } of uniquePhotos.values()) {
+        // Construct a minimal Photo object sufficient for completePhoto
+        const photo: Photo = {
+          id: originalName, // Temporary ID
+          originalName,
+          status: 'pending',
+          uri: '',
+          cameraPath: '',
+          pendingPath: '', // completePhoto will find the files
+          extension,
+          isVideo: this.isVideoFile(originalName),
+          size: 0,
+          modifiedTime: 0,
+        };
+
+        const result = await this.completePhoto(photo);
+        if (result.success) {
+          successCount++;
+        } else {
+          failCount++;
+          console.error(`Failed to complete ${originalName}: ${result.error}`);
+        }
+      }
+
+      if (failCount > 0) {
+        return {
+          success: false,
+          error: `Completed ${successCount} photos, failed ${failCount}`,
+        };
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error completing all pending:', error);
       return { success: false, error: String(error) };
     }
   }

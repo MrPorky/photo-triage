@@ -20,6 +20,7 @@ interface PhotoContextType {
   markAsPending: (photo: Photo) => Promise<void>;
   removeFromPending: (photo: Photo) => Promise<void>;
   completePhoto: (photo: Photo) => Promise<void>;
+  completeAllPending: () => Promise<void>;
   selectPhoto: (photoId: string | null) => void;
 
   // Filters
@@ -144,6 +145,32 @@ export function PhotoProvider({ children }: PhotoProviderProps) {
   );
 
   /**
+   * Complete all pending photos
+   */
+  const completeAllPending = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await fileSystemService.completeAllPending();
+
+      if (result.success) {
+        // Reload photos to reflect changes
+        await loadPhotos();
+      } else {
+        setError(result.error || 'Failed to complete all pending photos');
+      }
+    } catch (err) {
+      console.error('Error completing all pending:', err);
+      setError(
+        err instanceof Error ? err.message : 'Failed to complete all pending',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [loadPhotos]);
+
+  /**
    * Select a photo by ID
    */
   const selectPhoto = useCallback(
@@ -196,6 +223,7 @@ export function PhotoProvider({ children }: PhotoProviderProps) {
     markAsPending,
     removeFromPending,
     completePhoto,
+    completeAllPending,
     selectPhoto,
     filterByStatus,
   };
