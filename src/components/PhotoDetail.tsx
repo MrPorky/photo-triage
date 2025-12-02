@@ -1,3 +1,4 @@
+import { eq, useLiveQuery } from '@tanstack/react-db';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import {
   AlertCircle,
@@ -8,7 +9,9 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { usePhotos } from '../contexts/PhotoContext';
+import { photoCollection } from '@/collections/photos';
+import { fileSystemService } from '@/services/filesystem';
+import type { Photo } from '@/types/photo';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import {
@@ -20,18 +23,64 @@ import {
   DialogTitle,
 } from './ui/dialog';
 
+type Action = 'pending' | 'complete' | 'revert';
+
+const updatePhotoStatus = async ([photo, action]: [
+  Photo,
+  Action,
+]): Promise<void> => {
+  let status = photo.status;
+
+  const performAction = async () => {
+    let resultPromise: ReturnType<typeof fileSystemService.markAsPending>;
+    switch (action) {
+      case 'pending':
+        status = 'pending';
+        resultPromise = fileSystemService.markAsPending(photo);
+        break;
+      case 'revert':
+        status = 'camera';
+        resultPromise = fileSystemService.revertPhoto(photo);
+        break;
+      case 'complete':
+        status = 'completed';
+        resultPromise = fileSystemService.completePhoto(photo);
+        break;
+    }
+
+    console.log('Updating photo status:', photo.id, 'to', status);
+    photoCollection.update(photo.id, (draft) => {
+      draft.status = status;
+    });
+
+    return resultPromise;
+  };
+
+  console.log('Performing file operation for action:', action);
+  const result = await performAction();
+  console.log('File operation result:', JSON.stringify(result, null, 2));
+
+  if (!result.success) {
+    console.error('File operation failed:', result.error);
+    photoCollection.update(photo.id, (draft) => {
+      draft.status = photo.status;
+    });
+    throw new Error(result.error || 'File operation failed');
+  }
+
+  console.log('Photo status updated successfully:', photo.id, status);
+};
+
 export default function PhotoDetail() {
   const { photoId } = useParams({ from: '/photo/$photoId' });
   const navigate = useNavigate();
-  const {
-    photos,
-    selectedPhoto,
-    selectPhoto,
-    loading,
-    markAsPending,
-    removeFromPending,
-    completePhoto,
-  } = usePhotos();
+  const { data: photos, isLoading } = useLiveQuery((q) =>
+    q
+      .from({ photos: photoCollection })
+      .where(({ photos }) => eq(photos.id, photoId)),
+  );
+  const selectedPhoto = photos?.[0] || null;
+
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmAction, setConfirmAction] = useState<
     'pending' | 'complete' | 'revert' | null
@@ -39,10 +88,6 @@ export default function PhotoDetail() {
 
   // Find current photo index and adjacent photos
   const currentIndex = photos.findIndex((p) => p.id === photoId);
-
-  useEffect(() => {
-    selectPhoto(photoId);
-  }, [photoId, selectPhoto]);
 
   const handleBack = useCallback(() => {
     navigate({ to: '/' });
@@ -68,7 +113,7 @@ export default function PhotoDetail() {
   // Keyboard navigation support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showConfirmDialog || loading) return;
+      if (showConfirmDialog || isLoading) return;
 
       if (e.key === 'ArrowLeft') {
         navigateToPrevious();
@@ -83,7 +128,7 @@ export default function PhotoDetail() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     showConfirmDialog,
-    loading,
+    isLoading,
     navigateToPrevious,
     navigateToNext,
     handleBack,
@@ -93,17 +138,7 @@ export default function PhotoDetail() {
     if (!selectedPhoto || !confirmAction) return;
 
     try {
-      switch (confirmAction) {
-        case 'pending':
-          await markAsPending(selectedPhoto);
-          break;
-        case 'revert':
-          await removeFromPending(selectedPhoto);
-          break;
-        case 'complete':
-          await completePhoto(selectedPhoto);
-          break;
-      }
+      updatePhotoStatus([selectedPhoto, confirmAction]);
       setShowConfirmDialog(false);
       setConfirmAction(null);
     } catch (error) {
@@ -291,12 +326,12 @@ export default function PhotoDetail() {
             <Button
               variant="outline"
               onClick={() => setShowConfirmDialog(false)}
-              disabled={loading}
+              disabled={isLoading}
             >
               Cancel
             </Button>
-            <Button onClick={handleAction} disabled={loading}>
-              {loading ? (
+            <Button onClick={handleAction} disabled={isLoading}>
+              {isLoading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Processing...

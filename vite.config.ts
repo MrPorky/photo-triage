@@ -22,4 +22,10 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    // Headers removed as they are no longer needed for FFmpeg
+  },
+  optimizeDeps: {
+    // Exclusions removed
+  },
 })

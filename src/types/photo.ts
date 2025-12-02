@@ -39,6 +39,9 @@ export interface Photo {
 
   /** Modified timestamp */
   modifiedTime: number;
+
+  /** Thumbnail URI (base64 or blob url) */
+  thumbnail?: string;
 }
 
 /**

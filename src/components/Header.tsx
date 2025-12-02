@@ -1,10 +1,19 @@
+import { eq, useLiveQuery } from '@tanstack/react-db';
 import { Camera, CheckCheck, CheckCircle2, Clock } from 'lucide-react';
-import { usePhotos } from '../contexts/PhotoContext';
+import { photoCollection } from '@/collections/photos';
 import { Button } from './ui/button';
 
 export default function Header() {
-  const { photos, completeAllPending, loading } = usePhotos();
+  const { data: photos, isLoading } = useLiveQuery((q) =>
+    q
+      .from({ photos: photoCollection })
+      .where(({ photos }) => eq(photos.status, 'pending')),
+  );
   const pendingCount = photos.filter((p) => p.status === 'pending').length;
+
+  const completeAllPending = () => {
+    // Implement the logic to complete all pending photos
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl px-4 py-3">
@@ -18,7 +27,7 @@ export default function Header() {
               variant="outline"
               size="sm"
               onClick={completeAllPending}
-              disabled={loading}
+              disabled={isLoading}
               className="gap-2 bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
             >
               <CheckCheck className="w-4 h-4" />

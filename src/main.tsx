@@ -1,5 +1,5 @@
 import { createRouter, RouterProvider } from '@tanstack/react-router';
-import { StrictMode, use } from 'react';
+import { StrictMode, use, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 
 // Import the generated route tree
@@ -30,6 +30,13 @@ const mediaPermissionsGranted = fileSystemService.ensureMediaPermissions();
 
 const App = () => {
   use(mediaPermissionsGranted);
+
+  useEffect(() => {
+    // Load photos when the app mounts
+    fileSystemService.loadPhotos().catch((error) => {
+      console.error('Error loading photos on app start:', error);
+    });
+  }, []);
 
   return (
     <StrictMode>
