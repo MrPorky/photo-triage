@@ -2,6 +2,7 @@ package photo.triage.plugins;
 
 import android.Manifest;
 import android.content.Intent;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -103,5 +104,26 @@ public class StorageAccessPlugin extends Plugin {
         PermissionState state = getPermissionState("storage");
         permissionsResult.put("storage", state.toString());
         call.resolve(permissionsResult);
+    }
+
+    @PluginMethod
+    public void scanFile(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null) {
+            call.reject("Must provide a file path");
+            return;
+        }
+
+        MediaScannerConnection.scanFile(
+            getContext(),
+            new String[]{path},
+            null,
+            (path1, uri) -> {
+                JSObject result = new JSObject();
+                result.put("path", path1);
+                result.put("uri", uri != null ? uri.toString() : null);
+                call.resolve(result);
+            }
+        );
     }
 }

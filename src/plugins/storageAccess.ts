@@ -10,6 +10,13 @@ export interface StorageAccessPlugin {
    * Request media permissions
    */
   requestPermissions(): Promise<{ storage: 'granted' | 'denied' | 'prompt' }>;
+
+  /**
+   * Scan a file to update it in the MediaStore
+   */
+  scanFile(options: {
+    path: string;
+  }): Promise<{ path: string; uri: string | null }>;
 }
 
 const StorageAccess = registerPlugin<StorageAccessPlugin>('StorageAccess');

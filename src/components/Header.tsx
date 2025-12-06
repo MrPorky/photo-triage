@@ -1,9 +1,23 @@
 import { eq, useLiveQuery } from '@tanstack/react-db';
 import { Camera, CheckCheck, CheckCircle2, Clock } from 'lucide-react';
+import { useState } from 'react';
 import { photoCollection } from '@/collections/photos';
+import { fileSystemService } from '@/services/filesystem';
 import { Button } from './ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from './ui/dialog';
 
 export default function Header() {
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [open, setOpen] = useState(false);
+
   const { data: photos, isLoading } = useLiveQuery((q) =>
     q
       .from({ photos: photoCollection })
@@ -11,8 +25,16 @@ export default function Header() {
   );
   const pendingCount = photos.filter((p) => p.status === 'pending').length;
 
-  const completeAllPending = () => {
-    // Implement the logic to complete all pending photos
+  const handleCompleteAll = async () => {
+    setIsCompleting(true);
+    try {
+      await fileSystemService.completeAllPending();
+      setOpen(false);
+    } catch (error) {
+      console.error('Failed to complete all photos:', error);
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   return (
@@ -23,16 +45,40 @@ export default function Header() {
             Gallery
           </h1>
           {pendingCount > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={completeAllPending}
-              disabled={isLoading}
-              className="gap-2 bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
-            >
-              <CheckCheck className="w-4 h-4" />
-              Complete All ({pendingCount})
-            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isLoading || isCompleting}
+                  className="gap-2 bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  Complete All ({pendingCount})
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Complete All Pending Photos?</DialogTitle>
+                  <DialogDescription>
+                    This will move {pendingCount} photos to the completed
+                    folder. This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setOpen(false)}
+                    disabled={isCompleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCompleteAll} disabled={isCompleting}>
+                    {isCompleting ? 'Completing...' : 'Complete All'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           )}
         </div>
 

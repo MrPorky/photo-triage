@@ -48,7 +48,9 @@ export default function Gallery() {
 
 function PhotoGrid() {
   const { data: photos } = useLiveQuery((q) =>
-    q.from({ photos: photoCollection }),
+    q
+      .from({ photos: photoCollection })
+      .orderBy(({ photos }) => photos.modifiedTime, 'desc'),
   );
   const navigate = useNavigate();
   const parentRef = useRef<HTMLDivElement>(null);

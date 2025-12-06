@@ -5,46 +5,35 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
-  Loader2,
   RotateCcw,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { photoCollection } from '@/collections/photos';
 import { fileSystemService } from '@/services/filesystem';
-import type { Photo } from '@/types/photo';
+import type { Photo, PhotoStatus } from '@/types/photo';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
-
-type Action = 'pending' | 'complete' | 'revert';
 
 const updatePhotoStatus = async ([photo, action]: [
   Photo,
-  Action,
+  PhotoStatus,
 ]): Promise<void> => {
   let status = photo.status;
 
   const performAction = async () => {
-    let resultPromise: ReturnType<typeof fileSystemService.markAsPending>;
+    let resultPromise: ReturnType<typeof fileSystemService.setStatusToPending>;
     switch (action) {
       case 'pending':
         status = 'pending';
-        resultPromise = fileSystemService.markAsPending(photo);
+        resultPromise = fileSystemService.setStatusToPending(photo);
         break;
-      case 'revert':
+      case 'camera':
         status = 'camera';
-        resultPromise = fileSystemService.revertPhoto(photo);
+        resultPromise = fileSystemService.setStatusToCamera(photo);
         break;
-      case 'complete':
+      case 'completed':
         status = 'completed';
-        resultPromise = fileSystemService.completePhoto(photo);
+        resultPromise = fileSystemService.setStatusToCompleted(photo);
         break;
     }
 
@@ -81,11 +70,6 @@ export default function PhotoDetail() {
   );
   const selectedPhoto = photos?.[0] || null;
 
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<
-    'pending' | 'complete' | 'revert' | null
-  >(null);
-
   // Find current photo index and adjacent photos
   const currentIndex = photos.findIndex((p) => p.id === photoId);
 
@@ -113,7 +97,7 @@ export default function PhotoDetail() {
   // Keyboard navigation support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (showConfirmDialog || isLoading) return;
+      if (isLoading) return;
 
       if (e.key === 'ArrowLeft') {
         navigateToPrevious();
@@ -126,29 +110,16 @@ export default function PhotoDetail() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    showConfirmDialog,
-    isLoading,
-    navigateToPrevious,
-    navigateToNext,
-    handleBack,
-  ]);
+  }, [isLoading, navigateToPrevious, navigateToNext, handleBack]);
 
-  const handleAction = async () => {
+  const handleAction = async (confirmAction: PhotoStatus) => {
     if (!selectedPhoto || !confirmAction) return;
 
     try {
       updatePhotoStatus([selectedPhoto, confirmAction]);
-      setShowConfirmDialog(false);
-      setConfirmAction(null);
     } catch (error) {
       console.error('Action failed:', error);
     }
-  };
-
-  const openConfirmDialog = (action: 'pending' | 'complete' | 'revert') => {
-    setConfirmAction(action);
-    setShowConfirmDialog(true);
   };
 
   if (!selectedPhoto) {
@@ -256,14 +227,14 @@ export default function PhotoDetail() {
               <Button
                 variant="secondary"
                 className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border-0"
-                onClick={() => openConfirmDialog('pending')}
+                onClick={() => handleAction('pending')}
               >
                 <Clock className="w-4 h-4 mr-2" />
                 Mark Pending
               </Button>
               <Button
                 className="w-full bg-white hover:bg-zinc-200 text-black border-0"
-                onClick={() => openConfirmDialog('complete')}
+                onClick={() => handleAction('completed')}
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
                 Complete
@@ -276,14 +247,14 @@ export default function PhotoDetail() {
               <Button
                 variant="outline"
                 className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                onClick={() => openConfirmDialog('revert')}
+                onClick={() => handleAction('camera')}
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Revert
               </Button>
               <Button
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white border-0"
-                onClick={() => openConfirmDialog('complete')}
+                onClick={() => handleAction('completed')}
               >
                 <CheckCircle2 className="w-4 h-4 mr-2" />
                 Complete
@@ -291,58 +262,18 @@ export default function PhotoDetail() {
             </>
           )}
 
-          {selectedPhoto.status === 'completed' && (
+          {/* {selectedPhoto.status === 'completed' && (
             <Button
               variant="secondary"
               className="w-full bg-zinc-800 hover:bg-zinc-700 text-white border-0 col-span-2"
-              onClick={() => openConfirmDialog('pending')}
+              onClick={() => handleAction('pending')}
             >
               <Clock className="w-4 h-4 mr-2" />
               Move back to Pending
             </Button>
-          )}
+          )} */}
         </div>
       </div>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {confirmAction === 'pending' && 'Mark as Pending?'}
-              {confirmAction === 'revert' && 'Remove from Pending?'}
-              {confirmAction === 'complete' && 'Complete & Archive?'}
-            </DialogTitle>
-            <DialogDescription>
-              {confirmAction === 'pending' &&
-                'This will copy the photo to the Pending folder for review or editing.'}
-              {confirmAction === 'revert' &&
-                'This will remove the photo from Pending and revert to the camera version.'}
-              {confirmAction === 'complete' &&
-                'This will find the latest version of the photo, move it to Completed, and delete all other copies including the original. This action cannot be undone.'}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowConfirmDialog(false)}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleAction} disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                'Confirm'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

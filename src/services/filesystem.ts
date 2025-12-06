@@ -497,6 +497,31 @@ class FileSystemService {
   }
 
   /**
+   * Scan a file to update MediaStore
+   */
+  private async scanFile(path: string): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    try {
+      const uriResult = await Filesystem.getUri({
+        path,
+        directory: this.baseDirectory,
+      });
+
+      if (uriResult.uri) {
+        // Convert file:// URI to absolute path
+        const absolutePath = decodeURIComponent(
+          uriResult.uri.replace('file://', ''),
+        );
+        await StorageAccess.scanFile({ path: absolutePath });
+        console.log('[FileSystem] Scanned file:', absolutePath);
+      }
+    } catch (error) {
+      console.error('[FileSystem] Error scanning file:', path, error);
+    }
+  }
+
+  /**
    * Copy a file from source to destination
    */
   private async copyFile(from: string, to: string): Promise<void> {
@@ -506,6 +531,7 @@ class FileSystemService {
       directory: this.baseDirectory,
       toDirectory: this.baseDirectory,
     });
+    await this.scanFile(to);
   }
 
   /**
@@ -516,12 +542,13 @@ class FileSystemService {
       path,
       directory: this.baseDirectory,
     });
+    await this.scanFile(path);
   }
 
   /**
    * Move a photo to pending (copy from camera to pending)
    */
-  async markAsPending(photo: Photo): Promise<FileOperationResult> {
+  async setStatusToPending(photo: Photo): Promise<FileOperationResult> {
     try {
       if (photo.status === 'pending') {
         console.log('Skipping markAsPending, already pending:', photo.id);
@@ -540,6 +567,13 @@ class FileSystemService {
         console.log('Marking completed photo as pending:', photo.id);
         const pendingPath = `${this.config.pendingFolder}/${photo.originalName}`;
 
+        // Update database entry
+        photoCollection.update(photo.id, (draft) => {
+          draft.status = 'pending';
+          draft.pendingPath = pendingPath;
+          delete draft.completedPath;
+        });
+
         // Copy from completed to pending (regular file path)
         await this.copyFile(photo.completedPath, pendingPath);
         await this.deleteFile(photo.completedPath);
@@ -551,12 +585,26 @@ class FileSystemService {
       console.log('Marking as pending:', photo.id);
       const pendingPath = `${this.config.pendingFolder}/${photo.originalName}`;
 
+      // Update database entry
+      photoCollection.update(photo.id, (draft) => {
+        draft.status = 'pending';
+        draft.pendingPath = pendingPath;
+        delete draft.completedPath;
+      });
+
       // Copy from camera to pending (regular file path)
       await this.copyFile(photo.cameraPath, pendingPath);
 
       console.log('Copied to pending:', pendingPath);
       return { success: true };
     } catch (error) {
+      // Revert database changes on error
+      photoCollection.update(photo.id, (draft) => {
+        draft.status = photo.status;
+        draft.pendingPath = photo.pendingPath;
+        draft.completedPath = photo.completedPath;
+      });
+
       console.error('Error marking as pending:', error);
       return { success: false, error: String(error) };
     }
@@ -565,7 +613,7 @@ class FileSystemService {
   /**
    * Revert a photo from pending or camera back to camera only (delete from pending and completed)
    */
-  async revertPhoto(photo: Photo): Promise<FileOperationResult> {
+  async setStatusToCamera(photo: Photo): Promise<FileOperationResult> {
     try {
       if (photo.status === 'camera') {
         console.log('Photo is already in camera state:', photo.id);
@@ -579,7 +627,16 @@ class FileSystemService {
         }
 
         console.log('Reverting completed photo to camera state:', photo.id);
+
+        // Update database entry
+        photoCollection.update(photo.id, (draft) => {
+          draft.status = 'camera';
+          delete draft.completedPath;
+        });
+
+        // Delete from completed folder
         await this.deleteFile(photo.completedPath);
+
         console.log('Deleted from completed:', photo.completedPath);
         return { success: true };
       }
@@ -591,8 +648,16 @@ class FileSystemService {
         }
 
         console.log('Reverting pending photo to camera state:', photo.id);
+
+        // Update database entry
+        photoCollection.update(photo.id, (draft) => {
+          draft.status = 'camera';
+          delete draft.pendingPath;
+        });
+
         // Delete from pending folder
         await this.deleteFile(photo.pendingPath);
+
         console.log('Deleted from pending:', photo.pendingPath);
         return { success: true };
       }
@@ -600,6 +665,13 @@ class FileSystemService {
       console.log('Invalid photo status for revert:', photo.id);
       return { success: false, error: 'Invalid photo status for revert' };
     } catch (error) {
+      // Revert database changes on error
+      photoCollection.update(photo.id, (draft) => {
+        draft.status = photo.status;
+        draft.pendingPath = photo.pendingPath;
+        draft.completedPath = photo.completedPath;
+      });
+
       console.error('Error removing from pending:', error);
       return { success: false, error: String(error) };
     }
@@ -609,7 +681,7 @@ class FileSystemService {
    * Complete a photo (move latest version to completed, delete all other copies)
    * This implements the "Complete Action" from the PRD
    */
-  async completePhoto(photo: Photo): Promise<FileOperationResult> {
+  async setStatusToCompleted(photo: Photo): Promise<FileOperationResult> {
     try {
       if (photo.status === 'completed') {
         console.log('Photo is already completed:', photo.id);
@@ -617,10 +689,7 @@ class FileSystemService {
       }
 
       // For camera photos with content URIs, we need to read and write
-      if (
-        photo.status === 'camera' &&
-        photo.cameraPath.startsWith('content://')
-      ) {
+      if (photo.status === 'camera') {
         try {
           console.log('Completing photo from content URI:', photo.id);
           const completedPath = `${this.config.completedFolder}/${photo.originalName}`;
@@ -632,16 +701,31 @@ class FileSystemService {
           });
 
           console.log('Read file data from content URI:', photo.cameraPath);
+
+          // Update database entry
+          photoCollection.update(photo.id, (draft) => {
+            draft.status = 'completed';
+            draft.completedPath = completedPath;
+          });
+
           // Write to completed folder
           await Filesystem.writeFile({
             path: completedPath,
             data: fileData.data,
             directory: this.baseDirectory,
           });
+          await this.scanFile(completedPath);
 
           console.log('Wrote file data to completed folder:', completedPath);
           return { success: true };
         } catch (error) {
+          // Revert database changes on error
+          photoCollection.update(photo.id, (draft) => {
+            draft.status = photo.status;
+            draft.pendingPath = photo.pendingPath;
+            draft.completedPath = photo.completedPath;
+          });
+
           console.error('Error completing from content URI:', error);
           return {
             success: false,
@@ -655,6 +739,14 @@ class FileSystemService {
         console.log('Completing pending photo:', photo.id);
         const baseName = this.getBaseFilename(photo.originalName);
         const ext = photo.extension;
+        const completedPath = `${this.config.completedFolder}/${photo.originalName}`;
+
+        // Update database entry
+        photoCollection.update(photo.id, (draft) => {
+          draft.status = 'completed';
+          draft.completedPath = completedPath;
+          delete draft.pendingPath;
+        });
 
         console.log('Reading pending directory:', this.config.pendingFolder);
         const files = await this.readDirectory(this.config.pendingFolder);
@@ -684,7 +776,6 @@ class FileSystemService {
         }
 
         const latestPath = `${this.config.pendingFolder}/${latestFilename}`;
-        const completedPath = `${this.config.completedFolder}/${photo.originalName}`;
 
         console.log(
           `Latest version to complete: ${latestFilename} (from ${latestPath})`,
@@ -699,7 +790,8 @@ class FileSystemService {
 
           if (fileBaseName === baseName && fileExt === ext) {
             console.log('Deleting pending file:', filename);
-            await this.deleteFile(`${this.config.pendingFolder}/${filename}`);
+            const pathToDelete = `${this.config.pendingFolder}/${filename}`;
+            await this.deleteFile(pathToDelete);
           }
         }
 
@@ -714,6 +806,13 @@ class FileSystemService {
         error: 'Invalid photo status for completion',
       };
     } catch (error) {
+      // Revert database changes on error
+      photoCollection.update(photo.id, (draft) => {
+        draft.status = photo.status;
+        draft.pendingPath = photo.pendingPath;
+        draft.completedPath = photo.completedPath;
+      });
+
       console.error('Error completing photo:', error);
       return { success: false, error: String(error) };
     }
@@ -724,57 +823,26 @@ class FileSystemService {
    */
   async completeAllPending(): Promise<FileOperationResult> {
     try {
-      const files = await this.readDirectory(this.config.pendingFolder);
-
-      // Group files by base name to identify unique photos
-      const uniquePhotos = new Map<
-        string,
-        { originalName: string; extension: string }
-      >();
-
-      for (const filename of files) {
-        const baseName = this.getBaseFilename(filename);
-        const ext = this.getFileExtension(filename);
-
-        // We want the clean name (without version) for the target file
-        const cleanName = `${baseName}.${ext}`;
-
-        if (!uniquePhotos.has(baseName)) {
-          uniquePhotos.set(baseName, {
-            originalName: cleanName,
-            extension: ext,
-          });
-        }
-      }
+      const pendingPhotos = photoCollection.toArray.filter(
+        (p) => p.status === 'pending',
+      );
 
       console.log(
-        `[FileSystem] Completing all pending: found ${uniquePhotos.size} unique photos`,
+        `[FileSystem] Completing all pending: found ${pendingPhotos.length} unique photos`,
       );
 
       let successCount = 0;
       let failCount = 0;
 
-      for (const { originalName, extension } of uniquePhotos.values()) {
-        // Construct a minimal Photo object sufficient for completePhoto
-        const photo: Photo = {
-          id: originalName, // Temporary ID
-          originalName,
-          status: 'pending',
-          uri: '',
-          cameraPath: '',
-          pendingPath: '', // completePhoto will find the files
-          extension,
-          isVideo: this.isVideoFile(originalName),
-          size: 0,
-          modifiedTime: 0,
-        };
-
-        const result = await this.completePhoto(photo);
+      for (const photo of pendingPhotos) {
+        const result = await this.setStatusToCompleted(photo);
         if (result.success) {
           successCount++;
         } else {
           failCount++;
-          console.error(`Failed to complete ${originalName}: ${result.error}`);
+          console.error(
+            `Failed to complete ${photo.originalName}: ${result.error}`,
+          );
         }
       }
 
