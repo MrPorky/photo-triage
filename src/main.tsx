@@ -1,4 +1,4 @@
-import { StrictMode, use, useEffect } from 'react';
+import { StrictMode, use, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 
 import './styles.css';
@@ -10,17 +10,24 @@ const mediaPermissionsGranted = fileSystemService.ensureMediaPermissions();
 
 const Root = () => {
   use(mediaPermissionsGranted);
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
 
   useEffect(() => {
     // Load photos when the app mounts
-    fileSystemService.loadPhotos().catch((error) => {
-      console.error('Error loading photos on app start:', error);
-    });
+    setIsLoadingPhotos(true);
+    fileSystemService
+      .loadPhotos()
+      .catch((error) => {
+        console.error('Error loading photos on app start:', error);
+      })
+      .finally(() => {
+        setIsLoadingPhotos(false);
+      });
   }, []);
 
   return (
     <StrictMode>
-      <App />
+      <App isLoadingPhotos={isLoadingPhotos} />
     </StrictMode>
   );
 };

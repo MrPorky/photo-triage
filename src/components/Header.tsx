@@ -1,5 +1,5 @@
 import { eq, useLiveQuery } from '@tanstack/react-db';
-import { Camera, CheckCheck, CheckCircle2, Clock } from 'lucide-react';
+import { CheckCheck, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { photoCollection } from '@/collections/photos';
 import { fileSystemService } from '@/services/filesystem';
@@ -14,7 +14,11 @@ import {
   DialogTrigger,
 } from './ui/dialog';
 
-export default function Header() {
+interface HeaderProps {
+  isLoadingPhotos?: boolean;
+}
+
+export default function Header({ isLoadingPhotos = false }: HeaderProps) {
   const [isCompleting, setIsCompleting] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -83,21 +87,12 @@ export default function Header() {
             </Dialog>
           )}
         </div>
-
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <Camera className="w-3.5 h-3.5 text-muted-foreground" />
-            <span className="hidden sm:inline">Camera</span>
+        {isLoadingPhotos && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Loading photos...</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-chart-3" />
-            <span className="hidden sm:inline">Pending</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-chart-2" />
-            <span className="hidden sm:inline">Completed</span>
-          </div>
-        </div>
+        )}
       </div>
     </header>
   );

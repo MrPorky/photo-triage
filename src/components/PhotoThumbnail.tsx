@@ -8,7 +8,11 @@ interface PhotoThumbnailProps {
 
 export function PhotoThumbnail({ photo, onClick }: PhotoThumbnailProps) {
   return (
-    <button className="h-[inherit] border-2" type="button" onClick={onClick}>
+    <button
+      className="h-[inherit] border-2 relative"
+      type="button"
+      onClick={onClick}
+    >
       {photo.isVideo ? (
         <video
           src={photo.uri}
