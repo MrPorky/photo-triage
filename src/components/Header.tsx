@@ -38,12 +38,10 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/50 backdrop-blur-xl px-4 py-3">
+    <header className="px-4 py-3">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold tracking-tight text-white">
-            Gallery
-          </h1>
+          <h1 className="text-lg font-semibold tracking-tight">Gallery</h1>
           {pendingCount > 0 && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
@@ -51,7 +49,6 @@ export default function Header() {
                   variant="outline"
                   size="sm"
                   disabled={isLoading || isCompleting}
-                  className="gap-2 bg-white/10 text-white border-white/20 hover:bg-white/20 hover:text-white"
                 >
                   <CheckCheck className="w-4 h-4" />
                   Complete All ({pendingCount})
@@ -68,12 +65,17 @@ export default function Header() {
                 <DialogFooter>
                   <Button
                     variant="outline"
+                    size="sm"
                     onClick={() => setOpen(false)}
                     disabled={isCompleting}
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleCompleteAll} disabled={isCompleting}>
+                  <Button
+                    size="sm"
+                    onClick={handleCompleteAll}
+                    disabled={isCompleting}
+                  >
                     {isCompleting ? 'Completing...' : 'Complete All'}
                   </Button>
                 </DialogFooter>
@@ -82,17 +84,17 @@ export default function Header() {
           )}
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-medium text-zinc-400">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <Camera className="w-3.5 h-3.5" />
+            <Camera className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="hidden sm:inline">Camera</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-amber-500" />
+            <Clock className="w-3.5 h-3.5 text-chart-3" />
             <span className="hidden sm:inline">Pending</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-chart-2" />
             <span className="hidden sm:inline">Completed</span>
           </div>
         </div>

@@ -1,0 +1,33 @@
+.swipe {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  overflow-y: hidden;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  container-type: size;
+  scrollbar-width: none;
+
+  > :nth-child(2) {
+    scroll-snap-align: center;
+  }
+
+  > * {
+    width: 100cqw;
+    height: 100cqh;
+
+    &:first-child {
+      /*animation: scroll_hold 0.0001s forwards;*/
+      scroll-snap-align: start;
+    }
+    &:last-child {
+      scroll-snap-align: end;
+    }
+  }
+}
+
+@keyframes scroll_hold {
+  to {
+    scroll-snap-align: start;
+  }
+}

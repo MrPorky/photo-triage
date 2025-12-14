@@ -1,17 +1,66 @@
 import { useLiveQuery } from '@tanstack/react-db';
-import { useNavigate } from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { photoCollection } from '@/collections/photos';
 import type { Photo } from '../types/photo';
+import PhotoDetail from './PhotoDetail';
 import { PhotoThumbnail } from './PhotoThumbnail';
 import { Card, CardContent } from './ui/card';
 
 export default function Gallery() {
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+
+  // Get all photos ordered by modified time
   const { data: photos, isLoading } = useLiveQuery((q) =>
-    q.from({ photos: photoCollection }),
+    q
+      .from({ photos: photoCollection })
+      .orderBy(({ photos }) => photos.modifiedTime, 'desc'),
   );
+
+  const handlePhotoClick = (photoId: string) => {
+    setSelectedPhotoId(photoId);
+  };
+
+  const handleBack = () => {
+    setSelectedPhotoId(null);
+  };
+
+  const handleNavigate = (direction: 'previous' | 'next') => {
+    const currentIndex = photos.findIndex((p) => p.id === selectedPhotoId);
+    if (currentIndex === -1) return;
+
+    if (direction === 'previous' && currentIndex > 0) {
+      setSelectedPhotoId(photos[currentIndex - 1].id);
+    } else if (direction === 'next' && currentIndex < photos.length - 1) {
+      setSelectedPhotoId(photos[currentIndex + 1].id);
+    }
+  };
+
+  // Show photo detail if a photo is selected
+  if (selectedPhotoId) {
+    const currentIndex = photos.findIndex((p) => p.id === selectedPhotoId);
+    const currentPhoto = photos[currentIndex];
+    const previousPhoto = currentIndex > 0 ? photos[currentIndex - 1] : null;
+    const nextPhoto =
+      currentIndex < photos.length - 1 ? photos[currentIndex + 1] : null;
+
+    if (!currentPhoto) {
+      // Photo not found, go back to gallery
+      setSelectedPhotoId(null);
+      return null;
+    }
+
+    return (
+      <PhotoDetail
+        currentPhoto={currentPhoto}
+        previousPhoto={previousPhoto}
+        nextPhoto={nextPhoto}
+        onBack={handleBack}
+        onNavigate={handleNavigate}
+      />
+    );
+  }
 
   if (isLoading && photos.length === 0) {
     return (
@@ -43,16 +92,19 @@ export default function Gallery() {
     );
   }
 
-  return <PhotoGrid />;
+  return <PhotoGrid onPhotoClick={handlePhotoClick} />;
 }
 
-function PhotoGrid() {
+interface PhotoGridProps {
+  onPhotoClick: (photoId: string) => void;
+}
+
+function PhotoGrid({ onPhotoClick }: PhotoGridProps) {
   const { data: photos } = useLiveQuery((q) =>
     q
       .from({ photos: photoCollection })
       .orderBy(({ photos }) => photos.modifiedTime, 'desc'),
   );
-  const navigate = useNavigate();
   const parentRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -78,21 +130,12 @@ function PhotoGrid() {
   });
 
   const handlePhotoClick = (photo: Photo) => {
-    navigate({ to: '/photo/$photoId', params: { photoId: photo.id } });
+    onPhotoClick(photo.id);
   };
 
   return (
-    <div
-      ref={parentRef}
-      className="flex-1 overflow-y-auto transition-all duration-300 relative bg-black"
-    >
-      <div
-        style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
-      >
+    <div ref={parentRef} className="overflow-auto">
+      <div className={`w-full relative h-[${rowVirtualizer.getTotalSize()}px]`}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const startIndex = virtualRow.index * columns;
           const rowPhotos = photos.slice(startIndex, startIndex + columns);
@@ -109,6 +152,7 @@ function PhotoGrid() {
                 transform: `translateY(${virtualRow.start}px)`,
                 display: 'grid',
                 gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                alignContent: 'center',
               }}
             >
               {rowPhotos.map((photo) => (

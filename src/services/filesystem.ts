@@ -326,17 +326,19 @@ class FileSystemService {
     // Mock data for browser environment
     if (!Capacitor.isNativePlatform()) {
       console.log('[FileSystem] Running in browser, returning mock data');
-      return Array.from({ length: 100 }).map((_, i) => ({
-        id: `mock-${i}`,
-        originalName: `mock_photo_${i}.jpg`,
-        status: 'camera',
-        uri: `https://picsum.photos/400/400?random=${i}`,
-        cameraPath: `/mock/path/${i}.jpg`,
-        extension: 'jpg',
-        isVideo: false,
-        size: 1024 * 1024,
-        modifiedTime: Date.now() - i * 1000 * 60 * 60,
-      }));
+      return Array.from({ length: 100 }).forEach((_, i) => {
+        photoCollection.insert({
+          id: `mock-${i}`,
+          originalName: `mock_photo_${i}.jpg`,
+          status: 'camera',
+          uri: `https://picsum.photos/307/409?random=${i}`,
+          cameraPath: `/mock/path/${i}.jpg`,
+          extension: 'jpg',
+          isVideo: false,
+          size: 1024 * 1024,
+          modifiedTime: Date.now() - i * 1000 * 60 * 60,
+        });
+      });
     }
 
     try {
@@ -379,12 +381,22 @@ class FileSystemService {
         const existing = photoCollection.get(baseName);
 
         if (existing) {
-          photoCollection.update(baseName, (draft) => {
+          photoCollection.update(baseName, async (draft) => {
             draft.status = 'camera';
             draft.uri = webUri;
             draft.cameraPath = cameraPath;
+            if (!draft.mediaDimensions) {
+              draft.mediaDimensions = await this.getMediaDimensions(
+                filename,
+                webUri,
+              );
+            }
           });
         } else {
+          const mediaDimensions = await this.getMediaDimensions(
+            filename,
+            webUri,
+          );
           const isVideo = this.isVideoFile(filename);
           const thumbnail = await this.generateThumbnail(webUri, ext, isVideo);
 
@@ -400,6 +412,7 @@ class FileSystemService {
             size: fileInfo.size,
             modifiedTime: fileInfo.modifiedTime,
             thumbnail,
+            mediaDimensions,
           });
         }
       }
@@ -493,6 +506,30 @@ class FileSystemService {
     } catch (error) {
       console.error('[FileSystem] Error loading photos:', error);
       throw error;
+    }
+  }
+
+  private async getMediaDimensions(filename: string, webUri: string) {
+    if (this.isVideoFile(filename)) {
+      return await new Promise<{ width: number; height: number } | undefined>(
+        (resolve) => {
+          const video = document.createElement('video');
+          video.onloadedmetadata = () => {
+            resolve({ width: video.videoWidth, height: video.videoHeight });
+          };
+          video.onerror = () => resolve(undefined);
+          video.src = webUri;
+        },
+      );
+    } else {
+      return await new Promise<{ width: number; height: number } | undefined>(
+        (resolve) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.width, height: img.height });
+          img.onerror = () => resolve(undefined);
+          img.src = webUri;
+        },
+      );
     }
   }
 

@@ -19,4 +19,10 @@ export const photoSchema = z.object({
   size: z.number(),
   modifiedTime: z.number(),
   thumbnail: z.string().optional(),
+  mediaDimensions: z
+    .object({
+      width: z.number(),
+      height: z.number(),
+    })
+    .optional(),
 });
