@@ -1,6 +1,6 @@
-import { eq, useLiveQuery } from '@tanstack/react-db';
+import { count, eq, useLiveQuery } from '@tanstack/react-db';
 import { CheckCheck, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { photoCollection } from '@/collections/photos';
 import { fileSystemService } from '@/services/filesystem';
 import { Button } from './ui/button';
@@ -14,20 +14,36 @@ import {
   DialogTrigger,
 } from './ui/dialog';
 
-interface HeaderProps {
-  isLoadingPhotos?: boolean;
-}
-
-export default function Header({ isLoadingPhotos = false }: HeaderProps) {
+export default function Header() {
+  const [isLoadingPhotos, setIsLoadingPhotos] = useState(true);
   const [isCompleting, setIsCompleting] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const { data: photos, isLoading } = useLiveQuery((q) =>
+  useEffect(() => {
+    // Load photos when the app mounts
+    setIsLoadingPhotos(true);
+    fileSystemService
+      .loadPhotos()
+      .catch((error) => {
+        console.error('Error loading photos on app start:', error);
+      })
+      .finally(() => {
+        setIsLoadingPhotos(false);
+      });
+  }, []);
+
+  const { data: photosCount, isLoading } = useLiveQuery((q) =>
     q
       .from({ photos: photoCollection })
-      .where(({ photos }) => eq(photos.status, 'pending')),
+      .groupBy(({ photos }) => photos.status)
+      .select(({ photos }) => ({
+        status: photos.status,
+        count: count(photos.status),
+      }))
+      .where(({ photos }) => eq(photos.status, 'pending'))
+      .findOne(),
   );
-  const pendingCount = photos.filter((p) => p.status === 'pending').length;
+  const pendingCount = photosCount?.count ?? 0;
 
   const handleCompleteAll = async () => {
     setIsCompleting(true);

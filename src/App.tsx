@@ -1,15 +1,17 @@
-import Gallery from './components/Gallery';
-import Header from './components/Header';
+import { createRouter, RouterProvider } from '@tanstack/react-router';
+import { routeTree } from './routeTree.gen';
 
-interface AppProps {
-  isLoadingPhotos?: boolean;
+const router = createRouter({
+  routeTree,
+  scrollRestoration: true,
+});
+
+declare module '@tanstack/react-router' {
+  interface Register {
+    router: typeof router;
+  }
 }
 
-export default function App({ isLoadingPhotos = false }: AppProps) {
-  return (
-    <main className="grid grid-rows-[auto_1fr] h-screen overflow-hidden">
-      <Header isLoadingPhotos={isLoadingPhotos} />
-      <Gallery />
-    </main>
-  );
+export default function App() {
+  return <RouterProvider router={router} />;
 }

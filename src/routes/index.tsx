@@ -1,61 +1,22 @@
+import {
+  createFileRoute,
+  useElementScrollRestoration,
+  useNavigate,
+} from '@tanstack/react-router';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { PhotoThumbnail } from '@/components/PhotoThumbnail';
+import { Card, CardContent } from '@/components/ui/card';
 import { usePhotos } from '@/hooks/usePhotos';
-import type { Photo } from '../types/photo';
-import PhotoDetail from './PhotoDetail';
-import { PhotoThumbnail } from './PhotoThumbnail';
-import { Card, CardContent } from './ui/card';
+import type { Photo } from '@/types/photo';
 
-export default function Gallery() {
-  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
-  const [savedScrollPosition, setSavedScrollPosition] = useState<number>(0);
+export const Route = createFileRoute('/')({
+  component: Gallery,
+});
+
+function Gallery() {
   const { photos, isLoading } = usePhotos();
-
-  const handlePhotoClick = (photoId: string, scrollPosition: number) => {
-    setSavedScrollPosition(scrollPosition);
-    setSelectedPhotoId(photoId);
-  };
-
-  const handleBack = () => {
-    setSelectedPhotoId(null);
-  };
-
-  const handleNavigate = (direction: 'previous' | 'next') => {
-    const currentIndex = photos.findIndex((p) => p.id === selectedPhotoId);
-    if (currentIndex === -1) return;
-
-    if (direction === 'previous' && currentIndex > 0) {
-      setSelectedPhotoId(photos[currentIndex - 1].id);
-    } else if (direction === 'next' && currentIndex < photos.length - 1) {
-      setSelectedPhotoId(photos[currentIndex + 1].id);
-    }
-  };
-
-  // Show photo detail if a photo is selected
-  if (selectedPhotoId) {
-    const currentIndex = photos.findIndex((p) => p.id === selectedPhotoId);
-    const currentPhoto = photos[currentIndex];
-    const previousPhoto = currentIndex > 0 ? photos[currentIndex - 1] : null;
-    const nextPhoto =
-      currentIndex < photos.length - 1 ? photos[currentIndex + 1] : null;
-
-    if (!currentPhoto) {
-      // Photo not found, go back to gallery
-      setSelectedPhotoId(null);
-      return null;
-    }
-
-    return (
-      <PhotoDetail
-        currentPhoto={currentPhoto}
-        previousPhoto={previousPhoto}
-        nextPhoto={nextPhoto}
-        onBack={handleBack}
-        onNavigate={handleNavigate}
-      />
-    );
-  }
 
   if (isLoading && photos.length === 0) {
     return (
@@ -87,23 +48,19 @@ export default function Gallery() {
     );
   }
 
-  return (
-    <PhotoGrid
-      onPhotoClick={handlePhotoClick}
-      savedScrollPosition={savedScrollPosition}
-    />
-  );
+  return <PhotoGrid />;
 }
 
-interface PhotoGridProps {
-  onPhotoClick: (photoId: string, scrollPosition: number) => void;
-  savedScrollPosition: number;
-}
-
-function PhotoGrid({ onPhotoClick, savedScrollPosition }: PhotoGridProps) {
+function PhotoGrid() {
   const { photos } = usePhotos();
+  const navigate = useNavigate();
   const parentRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState(document.body.clientWidth);
+
+  const scrollRestorationId = 'photo-gallery';
+  const scrollEntry = useElementScrollRestoration({
+    id: scrollRestorationId,
+  });
 
   useEffect(() => {
     if (!parentRef.current) return;
@@ -124,16 +81,19 @@ function PhotoGrid({ onPhotoClick, savedScrollPosition }: PhotoGridProps) {
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
     overscan: 5,
-    initialOffset: savedScrollPosition,
+    initialOffset: scrollEntry?.scrollY,
   });
 
-  const handlePhotoClick = (photo: Photo) => {
-    const scrollPosition = parentRef.current?.scrollTop || 0;
-    onPhotoClick(photo.id, scrollPosition);
+  const handlePhotoClick = async (photo: Photo) => {
+    navigate({ to: '/$photoId', params: { photoId: photo.id } });
   };
 
   return (
-    <div ref={parentRef} className="overflow-auto">
+    <div
+      ref={parentRef}
+      data-scroll-restoration-id={scrollRestorationId}
+      className="overflow-auto"
+    >
       <div
         className="w-full relative"
         style={{ height: rowVirtualizer.getTotalSize() }}
