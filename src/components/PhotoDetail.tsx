@@ -93,7 +93,7 @@ export default function PhotoDetail({
 
   return (
     <div className="grid grid-rows-[1fr_auto] overflow-hidden relative">
-      <div className="absolute top-0 left-0 right-0 p-4 bg-linear-to-b from-background/80 to-transparent">
+      <div className="z-10 absolute top-0 left-0 right-0 p-4 bg-linear-to-b from-background/80 to-transparent">
         <Button variant="link" size="sm" onClick={handleBack}>
           <ArrowLeft />
         </Button>

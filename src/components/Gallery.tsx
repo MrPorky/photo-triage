@@ -1,8 +1,7 @@
-import { useLiveQuery } from '@tanstack/react-db';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { photoCollection } from '@/collections/photos';
+import { usePhotos } from '@/hooks/usePhotos';
 import type { Photo } from '../types/photo';
 import PhotoDetail from './PhotoDetail';
 import { PhotoThumbnail } from './PhotoThumbnail';
@@ -10,15 +9,11 @@ import { Card, CardContent } from './ui/card';
 
 export default function Gallery() {
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [savedScrollPosition, setSavedScrollPosition] = useState<number>(0);
+  const { photos, isLoading } = usePhotos();
 
-  // Get all photos ordered by modified time
-  const { data: photos, isLoading } = useLiveQuery((q) =>
-    q
-      .from({ photos: photoCollection })
-      .orderBy(({ photos }) => photos.modifiedTime, 'desc'),
-  );
-
-  const handlePhotoClick = (photoId: string) => {
+  const handlePhotoClick = (photoId: string, scrollPosition: number) => {
+    setSavedScrollPosition(scrollPosition);
     setSelectedPhotoId(photoId);
   };
 
@@ -92,19 +87,21 @@ export default function Gallery() {
     );
   }
 
-  return <PhotoGrid onPhotoClick={handlePhotoClick} />;
+  return (
+    <PhotoGrid
+      onPhotoClick={handlePhotoClick}
+      savedScrollPosition={savedScrollPosition}
+    />
+  );
 }
 
 interface PhotoGridProps {
-  onPhotoClick: (photoId: string) => void;
+  onPhotoClick: (photoId: string, scrollPosition: number) => void;
+  savedScrollPosition: number;
 }
 
-function PhotoGrid({ onPhotoClick }: PhotoGridProps) {
-  const { data: photos } = useLiveQuery((q) =>
-    q
-      .from({ photos: photoCollection })
-      .orderBy(({ photos }) => photos.modifiedTime, 'desc'),
-  );
+function PhotoGrid({ onPhotoClick, savedScrollPosition }: PhotoGridProps) {
+  const { photos } = usePhotos();
   const parentRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
 
@@ -127,15 +124,20 @@ function PhotoGrid({ onPhotoClick }: PhotoGridProps) {
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
     overscan: 5,
+    initialOffset: savedScrollPosition,
   });
 
   const handlePhotoClick = (photo: Photo) => {
-    onPhotoClick(photo.id);
+    const scrollPosition = parentRef.current?.scrollTop || 0;
+    onPhotoClick(photo.id, scrollPosition);
   };
 
   return (
     <div ref={parentRef} className="overflow-auto">
-      <div className={`w-full relative h-[${rowVirtualizer.getTotalSize()}px]`}>
+      <div
+        className="w-full relative"
+        style={{ height: rowVirtualizer.getTotalSize() }}
+      >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const startIndex = virtualRow.index * columns;
           const rowPhotos = photos.slice(startIndex, startIndex + columns);

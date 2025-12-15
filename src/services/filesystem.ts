@@ -731,27 +731,16 @@ class FileSystemService {
           console.log('Completing photo from content URI:', photo.id);
           const completedPath = `${this.config.completedFolder}/${photo.originalName}`;
 
-          console.log('Completed path for content URI:', completedPath);
-          // Read from content URI (no directory parameter)
-          const fileData = await Filesystem.readFile({
-            path: photo.cameraPath,
-          });
-
-          console.log('Read file data from content URI:', photo.cameraPath);
-
           // Update database entry
           photoCollection.update(photo.id, (draft) => {
             draft.status = 'completed';
             draft.completedPath = completedPath;
           });
 
-          // Write to completed folder
-          await Filesystem.writeFile({
-            path: completedPath,
-            data: fileData.data,
-            directory: this.baseDirectory,
-          });
-          await this.scanFile(completedPath);
+          // Copy from camera to pending (regular file path)
+          await this.copyFile(photo.cameraPath, completedPath);
+
+          console.log('Copied to completed:', completedPath);
 
           console.log('Wrote file data to completed folder:', completedPath);
           return { success: true };
